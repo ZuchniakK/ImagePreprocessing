@@ -1,0 +1,4 @@
+model_checkpoint_path: "model_final_cifar10_cropp_to_24_resized_m0_c32_c32_f192_f96_e2.1_b128_tf0.2_tp0.95.ckpt"
+all_model_checkpoint_paths: "model_at_1.0_epoch_cifar10_cropp_to_24_resized_m0_c32_c32_f192_f96_e2.1_b128_tf0.2_tp0.95.ckpt"
+all_model_checkpoint_paths: "model_at_2.0_epoch_cifar10_cropp_to_24_resized_m0_c32_c32_f192_f96_e2.1_b128_tf0.2_tp0.95.ckpt"
+all_model_checkpoint_paths: "model_final_cifar10_cropp_to_24_resized_m0_c32_c32_f192_f96_e2.1_b128_tf0.2_tp0.95.ckpt"

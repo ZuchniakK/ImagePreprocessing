@@ -24,6 +24,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
 
 def train_cifar10(conv1size=32,
                   conv2size=32,
+                  conv3size=32,
                   local3size=192,
                   local4size=96,
                   training_epoch=2.1,
@@ -32,11 +33,12 @@ def train_cifar10(conv1size=32,
                   testing_part=0.95,
                   cropped_size=24,
                   interpolation_method=0):
-    file_group_name = '_cifar10_cropp_to_%s_resized_m%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
+    file_group_name = '_cifar10_c3_cropp_to_%s_resized_m%s_c%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
         str(cropped_size),
         str(interpolation_method),
         str(conv1size),
         str(conv2size),
+        str(conv3size),
         str(local3size),
         str(local4size),
         str(training_epoch),
@@ -85,18 +87,27 @@ def train_cifar10(conv1size=32,
     b_conv1 = tf.Variable(tf.constant(0.0, shape=[conv1size]), name='b_conv1')
     conv1 = tf.nn.relu(tf.nn.conv2d(resized_images, W_conv1, [1, 1, 1, 1], padding='SAME') + b_conv1
                        , name='conv1')
-    pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
-                           padding='SAME', name='pool1')
-    norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                      name='norm1')
+
     W_conv2 = _variable_with_weight_decay('W_conv2',
                                           shape=[5, 5, conv1size, conv2size],
                                           stddev=5e-2,
                                           wd=0.0)
-    b_conv2 = tf.Variable(tf.constant(0.1, shape=[conv2size]), name='b_conv2')
-    conv2 = tf.nn.relu(tf.nn.conv2d(norm1, W_conv2, [1, 1, 1, 1], padding='SAME') + b_conv2
+    b_conv2 = tf.Variable(tf.constant(0.0, shape=[conv1size]), name='b_conv2')
+    conv2 = tf.nn.relu(tf.nn.conv2d(conv1, W_conv2, [1, 1, 1, 1], padding='SAME') + b_conv2
                        , name='conv2')
-    norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+
+    pool1 = tf.nn.max_pool(conv2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
+                           padding='SAME', name='pool1')
+    norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                      name='norm1')
+    W_conv3 = _variable_with_weight_decay('W_conv3',
+                                          shape=[5, 5, conv2size, conv3size],
+                                          stddev=5e-2,
+                                          wd=0.0)
+    b_conv3 = tf.Variable(tf.constant(0.1, shape=[conv3size]), name='b_conv3')
+    conv3 = tf.nn.relu(tf.nn.conv2d(norm1, W_conv3, [1, 1, 1, 1], padding='SAME') + b_conv3
+                       , name='conv3')
+    norm2 = tf.nn.lrn(conv3, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                       name='norm2')
     pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
                            strides=[1, 2, 2, 1], padding='SAME', name='pool2')

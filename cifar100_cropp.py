@@ -5,10 +5,10 @@ import datetime
 import sys
 import tensorflow as tf
 import numpy as np
-import cifar10_reader
+import cifar100_reader
 
 ORIGINAL_IMAGE_SIZE = 32
-NUM_CLASSES = 10
+NUM_CLASSES = 100
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
 NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 10000
 
@@ -22,17 +22,17 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     return var
 
 
-def train_cifar10(conv1size=32,
-                  conv2size=32,
-                  local3size=192,
-                  local4size=96,
-                  training_epoch=2.1,
-                  batch_size=128,
-                  test_frequency_per_epoch=0.2,
-                  testing_part=0.95,
-                  cropped_size=24,
-                  interpolation_method=0):
-    file_group_name = '_cifar10_cropp_to_%s_resized_m%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
+def train_cifar100(conv1size=32,
+                   conv2size=32,
+                   local3size=192,
+                   local4size=96,
+                   training_epoch=2.1,
+                   batch_size=128,
+                   test_frequency_per_epoch=0.2,
+                   testing_part=0.95,
+                   cropped_size=24,
+                   interpolation_method=0):
+    file_group_name = '_cifar100_cropp_to_%s_resized_m%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
         str(cropped_size),
         str(interpolation_method),
         str(conv1size),
@@ -49,7 +49,7 @@ def train_cifar10(conv1size=32,
     num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / batch_size
     training_loops = int(num_batches_per_epoch * training_epoch)
     test_frequency = int(num_batches_per_epoch * test_frequency_per_epoch)
-    print (test_frequency,'testfeqwqwq')
+    print (test_frequency, 'testfeqwqwq')
     print('Plan: Training Epoch %s (loops %s * batch size %s)'
           % (str(training_epoch), str(training_loops), str(batch_size)))
     epoch_to_save_model_state = [1, 2, 15, 40, 80, 130, 180]
@@ -125,8 +125,8 @@ def train_cifar10(conv1size=32,
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
-    labels_gen = cifar10_reader.generate_cifar10_labels_batch(batch_size)
-    images_gen = cifar10_reader.generate_cifar10_images_batch(batch_size)
+    labels_gen = cifar100_reader.generate_cifar100_labels_batch(batch_size)
+    images_gen = cifar100_reader.generate_cifar100_images_batch(batch_size)
 
     time_in_samples = []
     time_in_epochs = []
@@ -134,8 +134,8 @@ def train_cifar10(conv1size=32,
     softmax_pred_all_test = []
     if testing_part == 1:
         test_sample_size = int(NUM_EXAMPLES_PER_EPOCH_FOR_TEST / batch_size) - 1
-        data_to_test = cifar10_reader.unpickle_data('test_batch')
-        labels_to_test = cifar10_reader.unpickle_labels('test_batch')
+        data_to_test = cifar100_reader.unpickle_data('test')
+        labels_to_test = cifar100_reader.unpickle_labels('test')
         real_sample_size = NUM_EXAMPLES_PER_EPOCH_FOR_TEST
     else:
         sample_size = int(NUM_EXAMPLES_PER_EPOCH_FOR_TEST * testing_part)
@@ -169,8 +169,8 @@ def train_cifar10(conv1size=32,
                 pass
             else:
                 testing_sample = np.random.choice(NUM_EXAMPLES_PER_EPOCH_FOR_TEST, sample_size, replace=False)
-                data_to_test = cifar10_reader.unpickle_data('test_batch', sample=testing_sample)
-                labels_to_test = cifar10_reader.unpickle_labels('test_batch', sample=testing_sample)
+                data_to_test = cifar100_reader.unpickle_data('test', sample=testing_sample)
+                labels_to_test = cifar100_reader.unpickle_labels('test', sample=testing_sample)
 
             softmax_pred_from_epoch_test = []
             for test_batch in range(int(real_sample_size / batch_size)):
@@ -212,16 +212,16 @@ def train_cifar10(conv1size=32,
 
 
 if __name__ == "__main__":
-    train_cifar10()
-    train_cifar10(conv1size=int(sys.argv[1]),
-                  conv2size=int(sys.argv[2]),
-                  local3size=int(sys.argv[3]),
-                  local4size=int(sys.argv[4]),
-                  training_epoch=int(sys.argv[5]),
-                  batch_size=int(sys.argv[6]),
-                  test_frequency=int(sys.argv[7]),
-                  testing_part=float(sys.argv[8]),
+    train_cifar100()
+    train_cifar100(conv1size=int(sys.argv[1]),
+                   conv2size=int(sys.argv[2]),
+                   local3size=int(sys.argv[3]),
+                   local4size=int(sys.argv[4]),
+                   training_epoch=int(sys.argv[5]),
+                   batch_size=int(sys.argv[6]),
+                   test_frequency=int(sys.argv[7]),
+                   testing_part=float(sys.argv[8]),
 
-                  cropped_size=int(sys.argv[9]),
-                  interpolation_method=int(sys.argv[13]),
-                  )
+                   cropped_size=int(sys.argv[9]),
+                   interpolation_method=int(sys.argv[13]),
+                   )

@@ -5,10 +5,11 @@ import datetime
 import sys
 import tensorflow as tf
 import numpy as np
-import cifar10_reader
+import cifar100_reader
+from math import pi as pi_value
 
 ORIGINAL_IMAGE_SIZE = 32
-NUM_CLASSES = 10
+NUM_CLASSES = 100
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
 NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 10000
 
@@ -22,7 +23,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     return var
 
 
-def train_cifar10(conv1size=32,
+def train_cifar100(conv1size=32,
                   conv2size=32,
                   local3size=192,
                   local4size=96,
@@ -30,11 +31,10 @@ def train_cifar10(conv1size=32,
                   batch_size=128,
                   test_frequency_per_epoch=0.2,
                   testing_part=0.95,
-                  cropped_size=24,
+                  max_angle=24,
                   interpolation_method=0):
-    file_group_name = '_cifar10_cropp_to_%s_resized_m%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
-        str(cropped_size),
-        str(interpolation_method),
+    file_group_name = '_cifar100_rotate_to_%s_degree_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
+        str(max_angle),
         str(conv1size),
         str(conv2size),
         str(local3size),
@@ -45,7 +45,7 @@ def train_cifar10(conv1size=32,
         str(testing_part),
     )
 
-    IMAGE_SIZE = cropped_size
+    max_angle_in_radians = max_angle * pi_value / 180
     num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / batch_size
     training_loops = int(num_batches_per_epoch * training_epoch)
     test_frequency = int(num_batches_per_epoch * test_frequency_per_epoch)
@@ -61,29 +61,33 @@ def train_cifar10(conv1size=32,
     images = tf.transpose(x_r, [0, 2, 3, 1])
 
     def train_preprocesing(train_batch):
-        # only cropping
-        return tf.map_fn(lambda img: tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3]), train_batch)
+        # only rotate
+        # return tf.map_fn(lambda img: tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3]), train_batch)
+        return tf.map_fn(lambda img: tf.contrib.image.rotate(img, tf.random_uniform([1],
+                                                                                    minval=-max_angle_in_radians,
+                                                                                    maxval=max_angle_in_radians))
+                         , train_batch)
 
-    def test_preprocessing(test_batch):
-        return tf.map_fn(lambda img: tf.image.central_crop(img,
-                                                           float(IMAGE_SIZE / ORIGINAL_IMAGE_SIZE)),
-                         test_batch)
+    # def test_preprocessing(test_batch):
+    #     return tf.map_fn(lambda img: tf.image.central_crop(img,
+    #                                                        float(IMAGE_SIZE / ORIGINAL_IMAGE_SIZE)),
+    #                      test_batch)
 
     preproc_images = tf.cond(is_train, lambda: train_preprocesing(images),
-                             lambda: test_preprocessing(images))
+                             lambda: images)
 
-    resized_images = tf.image.resize_images(preproc_images,
-                                            [ORIGINAL_IMAGE_SIZE,
-                                             ORIGINAL_IMAGE_SIZE],
-                                            method=interpolation_method)
-    print (resized_images)
+    # resized_images = tf.image.resize_images(preproc_images,
+    #                                         [ORIGINAL_IMAGE_SIZE,
+    #                                          ORIGINAL_IMAGE_SIZE],
+    #                                         method=interpolation_method)
+    # print (resized_images)
 
     W_conv1 = _variable_with_weight_decay('W_conv1',
                                           shape=[5, 5, 3, conv1size],
                                           stddev=5e-2,
                                           wd=0.0)
     b_conv1 = tf.Variable(tf.constant(0.0, shape=[conv1size]), name='b_conv1')
-    conv1 = tf.nn.relu(tf.nn.conv2d(resized_images, W_conv1, [1, 1, 1, 1], padding='SAME') + b_conv1
+    conv1 = tf.nn.relu(tf.nn.conv2d(preproc_images, W_conv1, [1, 1, 1, 1], padding='SAME') + b_conv1
                        , name='conv1')
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
                            padding='SAME', name='pool1')
@@ -125,8 +129,8 @@ def train_cifar10(conv1size=32,
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
-    labels_gen = cifar10_reader.generate_cifar10_labels_batch(batch_size)
-    images_gen = cifar10_reader.generate_cifar10_images_batch(batch_size)
+    labels_gen = cifar100_reader.generate_cifar100_labels_batch(batch_size)
+    images_gen = cifar100_reader.generate_cifar100_images_batch(batch_size)
 
     time_in_samples = []
     time_in_epochs = []
@@ -134,8 +138,8 @@ def train_cifar10(conv1size=32,
     softmax_pred_all_test = []
     if testing_part == 1:
         test_sample_size = int(NUM_EXAMPLES_PER_EPOCH_FOR_TEST / batch_size) - 1
-        data_to_test = cifar10_reader.unpickle_data('test_batch')
-        labels_to_test = cifar10_reader.unpickle_labels('test_batch')
+        data_to_test = cifar100_reader.unpickle_data('test')
+        labels_to_test = cifar100_reader.unpickle_labels('test')
         real_sample_size = NUM_EXAMPLES_PER_EPOCH_FOR_TEST
     else:
         sample_size = int(NUM_EXAMPLES_PER_EPOCH_FOR_TEST * testing_part)
@@ -169,8 +173,8 @@ def train_cifar10(conv1size=32,
                 pass
             else:
                 testing_sample = np.random.choice(NUM_EXAMPLES_PER_EPOCH_FOR_TEST, sample_size, replace=False)
-                data_to_test = cifar10_reader.unpickle_data('test_batch', sample=testing_sample)
-                labels_to_test = cifar10_reader.unpickle_labels('test_batch', sample=testing_sample)
+                data_to_test = cifar100_reader.unpickle_data('test', sample=testing_sample)
+                labels_to_test = cifar100_reader.unpickle_labels('test', sample=testing_sample)
 
             softmax_pred_from_epoch_test = []
             for test_batch in range(int(real_sample_size / batch_size)):
@@ -212,8 +216,8 @@ def train_cifar10(conv1size=32,
 
 
 if __name__ == "__main__":
-    train_cifar10()
-    train_cifar10(conv1size=int(sys.argv[1]),
+    train_cifar100()
+    train_cifar100(conv1size=int(sys.argv[1]),
                   conv2size=int(sys.argv[2]),
                   local3size=int(sys.argv[3]),
                   local4size=int(sys.argv[4]),
@@ -221,7 +225,5 @@ if __name__ == "__main__":
                   batch_size=int(sys.argv[6]),
                   test_frequency=int(sys.argv[7]),
                   testing_part=float(sys.argv[8]),
-
-                  cropped_size=int(sys.argv[9]),
-                  interpolation_method=int(sys.argv[13]),
+                  max_angle=int(sys.argv[9]),
                   )

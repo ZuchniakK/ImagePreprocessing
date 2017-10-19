@@ -6,6 +6,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 import cifar10_reader
+from math import pi as pi_value
 
 ORIGINAL_IMAGE_SIZE = 32
 NUM_CLASSES = 10
@@ -30,11 +31,10 @@ def train_cifar10(conv1size=32,
                   batch_size=128,
                   test_frequency_per_epoch=0.2,
                   testing_part=0.95,
-                  cropped_size=24,
+                  max_angle=24,
                   interpolation_method=0):
-    file_group_name = '_cifar10_cropp_to_%s_resized_m%s_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
-        str(cropped_size),
-        str(interpolation_method),
+    file_group_name = '_cifar10_rotate_to_%s_degree_c%s_c%s_f%s_f%s_e%s_b%s_tf%s_tp%s' % (
+        str(max_angle),
         str(conv1size),
         str(conv2size),
         str(local3size),
@@ -45,45 +45,49 @@ def train_cifar10(conv1size=32,
         str(testing_part),
     )
 
-    IMAGE_SIZE = cropped_size
+    max_angle_in_radians = max_angle * pi_value / 180
     num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / batch_size
     training_loops = int(num_batches_per_epoch * training_epoch)
     test_frequency = int(num_batches_per_epoch * test_frequency_per_epoch)
-    print (test_frequency,'testfeqwqwq')
+    print (test_frequency, 'testfeqwqwq')
     print('Plan: Training Epoch %s (loops %s * batch size %s)'
           % (str(training_epoch), str(training_loops), str(batch_size)))
     epoch_to_save_model_state = [1, 2, 15, 40, 80, 130, 180]
     loop_to_save_model_state = [int(num_batches_per_epoch * i) for i in epoch_to_save_model_state]
     x = tf.placeholder(tf.float32, shape=[None, ORIGINAL_IMAGE_SIZE * ORIGINAL_IMAGE_SIZE * 3])
-    labels = tf.placeholder(tf.float32, shape=[None, 10])
+    labels = tf.placeholder(tf.float32, shape=[None, NUM_CLASSES])
     is_train = tf.placeholder(tf.bool)
     x_r = tf.reshape(x, [tf.shape(x)[0], 3, ORIGINAL_IMAGE_SIZE, ORIGINAL_IMAGE_SIZE])
     images = tf.transpose(x_r, [0, 2, 3, 1])
 
     def train_preprocesing(train_batch):
-        # only cropping
-        return tf.map_fn(lambda img: tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3]), train_batch)
+        # only rotate
+        # return tf.map_fn(lambda img: tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3]), train_batch)
+        return tf.map_fn(lambda img: tf.contrib.image.rotate(img, tf.random_uniform([1],
+                                                                                    minval=-max_angle_in_radians,
+                                                                                    maxval=max_angle_in_radians))
+                         ,train_batch)
 
-    def test_preprocessing(test_batch):
-        return tf.map_fn(lambda img: tf.image.central_crop(img,
-                                                           float(IMAGE_SIZE / ORIGINAL_IMAGE_SIZE)),
-                         test_batch)
+    # def test_preprocessing(test_batch):
+    #     return tf.map_fn(lambda img: tf.image.central_crop(img,
+    #                                                        float(IMAGE_SIZE / ORIGINAL_IMAGE_SIZE)),
+    #                      test_batch)
 
     preproc_images = tf.cond(is_train, lambda: train_preprocesing(images),
-                             lambda: test_preprocessing(images))
+                             lambda: images)
 
-    resized_images = tf.image.resize_images(preproc_images,
-                                            [ORIGINAL_IMAGE_SIZE,
-                                             ORIGINAL_IMAGE_SIZE],
-                                            method=interpolation_method)
-    print (resized_images)
+    # resized_images = tf.image.resize_images(preproc_images,
+    #                                         [ORIGINAL_IMAGE_SIZE,
+    #                                          ORIGINAL_IMAGE_SIZE],
+    #                                         method=interpolation_method)
+    # print (resized_images)
 
     W_conv1 = _variable_with_weight_decay('W_conv1',
                                           shape=[5, 5, 3, conv1size],
                                           stddev=5e-2,
                                           wd=0.0)
     b_conv1 = tf.Variable(tf.constant(0.0, shape=[conv1size]), name='b_conv1')
-    conv1 = tf.nn.relu(tf.nn.conv2d(resized_images, W_conv1, [1, 1, 1, 1], padding='SAME') + b_conv1
+    conv1 = tf.nn.relu(tf.nn.conv2d(preproc_images, W_conv1, [1, 1, 1, 1], padding='SAME') + b_conv1
                        , name='conv1')
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
                            padding='SAME', name='pool1')
@@ -128,7 +132,8 @@ def train_cifar10(conv1size=32,
     labels_gen = cifar10_reader.generate_cifar10_labels_batch(batch_size)
     images_gen = cifar10_reader.generate_cifar10_images_batch(batch_size)
 
-    time = []
+    time_in_samples = []
+    time_in_epochs = []
     accuracy_list = []
     softmax_pred_all_test = []
     if testing_part == 1:
@@ -186,7 +191,8 @@ def train_cifar10(conv1size=32,
                 softmax_pred_from_epoch_test.extend(list(softmax_fully_test))
             softmax_pred_all_test.append(softmax_pred_from_epoch_test)
             total_accu /= test_sample_size
-            time.append(i)
+            time_in_samples.append(i * batch_size)
+            time_in_epochs.append(i * num_batches_per_epoch)
             accuracy_list.append(total_accu)
             print("step %d, training accuracy on test%g" % (i, total_accu))
             print(datetime.datetime.now())
@@ -202,7 +208,7 @@ def train_cifar10(conv1size=32,
     print('len of softmax pred all test', len(softmax_pred_all_test[0]))
     print('len of softmax pred all test', len(softmax_pred_all_test[0][0]))
     np.save('params/softmax_test_values_vs_time' + file_group_name, np.array(softmax_pred_all_test))
-    training_in_time = np.array([time, accuracy_list])
+    training_in_time = np.array([time_in_samples, time_in_epochs, accuracy_list])
     np.save('params/accu_vs_time' + file_group_name, training_in_time)
     save_path = saver.save(sess, "models/model_final" + file_group_name + ".ckpt")
     print("Model saved in file: %s" % save_path)
@@ -220,6 +226,6 @@ if __name__ == "__main__":
                   test_frequency=int(sys.argv[7]),
                   testing_part=float(sys.argv[8]),
 
-                  cropped_size=int(sys.argv[9]),
-                  interpolation_method=int(sys.argv[13]),
+                  max_angle=int(sys.argv[9]),
+
                   )
